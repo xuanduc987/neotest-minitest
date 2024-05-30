@@ -33,12 +33,34 @@ function NeotestAdapter.filter_dir(name, rel_path, root)
   return name ~= "vendor"
 end
 
+local table_is_empty = function(tbl)
+  return next(tbl) == nil
+end
+
 ---Given a file path, parse all the tests within it.
 ---@async
 ---@param file_path string Absolute file path
 ---@return neotest.Tree | nil
 function NeotestAdapter.discover_positions(file_path)
-  local query = [[
+  local inherit_from_addition_base_test_classes = ""
+  if not table_is_empty(config.additional_base_test_classes) then
+    inherit_from_addition_base_test_classes = string.format(
+      [[
+      ; extends from additional base test classes
+      ((
+        class
+        name: [
+          (constant) @namespace.name
+          (scope_resolution scope: (constant) name: (constant) @namespace.name)
+        ]
+        (superclass) @superclass (#match? @superclass "(%s)$" )
+      )) @namespace.definition
+      ]],
+      table.concat(config.additional_base_test_classes, "|")
+    )
+  end
+  local query = string.format(
+    [[
     ; Classes that inherit from Minitest::Test
     ((
       class
@@ -73,7 +95,11 @@ function NeotestAdapter.discover_positions(file_path)
       method: (identifier) @func_name (#match? @func_name "^(test)$")
       arguments: (argument_list (string (string_content) @test.name))
     )) @test.definition
-  ]]
+
+    %s
+  ]],
+    inherit_from_addition_base_test_classes
+  )
 
   return lib.treesitter.parse_positions(file_path, query, {
     nested_tests = true,
@@ -225,6 +251,9 @@ setmetatable(NeotestAdapter, {
       config.get_test_cmd = function()
         return opts.test_cmd
       end
+    end
+    if opts.additional_base_test_classes then
+      config.additional_base_test_classes = opts.additional_base_test_classes
     end
     return NeotestAdapter
   end,

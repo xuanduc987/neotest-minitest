@@ -9,4 +9,6 @@ M.get_test_cmd = function()
   })
 end
 
+M.additional_base_test_classes = {}
+
 return M
